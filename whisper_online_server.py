@@ -134,7 +134,7 @@ class ServerProcessor:
 
     def send_result(self, o):
         msg = self.format_output_transcript(o)
-        if msg is not None:
+        if msg is not None and msg.strip():  # Check if the message is not None and not empty
             self.connection.send(msg)
 
     def process(self):
