@@ -4,7 +4,8 @@ import socket
 import argparse
 import threading
 import time
-# import time as t
+import asyncio
+from llm import llm_request
 
 # Silence configuration
 SILENCE_THRESHOLD = 0.01  # Adjust this value based on your microphone sensitivity
@@ -26,7 +27,7 @@ def audio_callback(indata, frames, time_info, status):
         
         sock.sendall(indata.tobytes())
 
-def receive_transcriptions():
+async def receive_transcriptions():
     global last_received_time
     global speech
     last_received_time = time.time()
@@ -58,14 +59,24 @@ def receive_transcriptions():
                     speech["text"] += text.replace("\n", " ")
                     print(f'Full text: {speech["text"]}')
                     print("---")
+
+                    # Make an asynchronous call to the LLM here
+                    await call_llm(speech["text"])
                 else:
                     print(f"Received invalid data: {data}")
         except socket.error as e:
             print(f"Socket error: {e}")
             break
 
-def main():
+async def call_llm(text):
+    # Implement your asynchronous LLM call here
+    # This is just a placeholder example
+    # await asyncio.sleep(1)
+    system_content = "Вы оператор сервисного центра по ремонту бытовой технике. Старайтесь не отвечать длинным текстом без крайней необходимости, ведь это телефонный разговор. Клиент не сможет прочитать ваш ответ, он будет его слушать."
+    text = llm_request(system_content, text)
+    print(f"[>> LLM >>] {text}")
 
+async def main():
     # Parse command-line arguments
     parser = argparse.ArgumentParser(description='Real-time audio streaming client')
     parser.add_argument('--model', type=str, default='large-v3', help='Whisper model to use')
@@ -86,9 +97,8 @@ def main():
     # Send the model and language to the server
     sock.sendall(f"{args.model}|{args.language}\n".encode())
 
-    # Start the receiving thread
-    receiving_thread = threading.Thread(target=receive_transcriptions)
-    receiving_thread.start()
+    # Start the receiving coroutine
+    receiving_task = asyncio.create_task(receive_transcriptions())
 
     # Start the audio stream from the microphone
     stream = sd.InputStream(samplerate=SAMPLE_RATE, channels=CHANNELS, dtype='int16',
@@ -98,7 +108,7 @@ def main():
 
     try:
         with stream:
-            sd.sleep(60 * 1000)  # Sleep for N seconds (adjust as needed)
+            await asyncio.sleep(60)  # Sleep for N seconds (adjust as needed)
     except KeyboardInterrupt:
         print("Recording stopped by the user.")
     finally:
@@ -107,8 +117,8 @@ def main():
         sock.close()
         print("Socket connection closed.")
 
-    # Wait for the receiving thread to finish
-    receiving_thread.join()
+    # Wait for the receiving coroutine to finish
+    await receiving_task
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())
