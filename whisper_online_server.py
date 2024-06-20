@@ -20,6 +20,8 @@ parser.add_argument("--warmup-file", type=str, dest="warmup_file",
 # options from whisper_online
 add_shared_args(parser)
 args = parser.parse_args()
+# Print args
+print(args)
 
 set_logging(args,logger,other="")
 

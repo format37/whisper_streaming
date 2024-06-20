@@ -1,8 +1,8 @@
 import os
+import asyncio
 from openai import OpenAI
 
-def llm_request(system_content, user_content):
-
+async def llm_request(messages, model):
     # Set your API key
     api_key = os.getenv("OPENAI_API_KEY")
     if not api_key:
@@ -10,20 +10,22 @@ def llm_request(system_content, user_content):
     client = OpenAI()
 
     response = client.chat.completions.create(
-    model="gpt-3.5-turbo",
-    messages=[
-        {"role": "system", "content": system_content},
-        {"role": "user", "content": user_content}
-    ]
+        model=model,
+        messages=messages
     )
     return response.choices[0].message.content
 
-def main():
+async def main():
     system_content = "You are a helpful assistant."
     user_content = "Who won the world series in 2020?"
-    message = llm_request(system_content, user_content)
+    model = "gpt-4o"
+    messages=[
+            {"role": "system", "content": system_content},
+            {"role": "user", "content": user_content}
+        ]
+    message = await llm_request(messages, model)
     print(message)
     print('Done')
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())

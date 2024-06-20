@@ -4,4 +4,4 @@ if [ -z "$OPENAI_API_KEY" ]; then
   echo "export OPENAI_API_KEY=YOUR_API_KEY"
   exit 1
 fi
-python3 whisper_online_server.py --backend openai-api --model large-v3
+python3 whisper_online_server.py --backend openai-api --model large-v3 --language ru --warmup-file output.mp3

@@ -6,14 +6,28 @@ import threading
 import time
 import asyncio
 from llm import llm_request
+from tts import speech_synthesis
+
+# Add this global variable
+is_speech_active = True
+
+# system_content = "Вы оператор колл центра. Ваша задача выяснить доволен ли клиент ремонтом и выслушать замечания клиента. Если понадобится завершить разговор, используйте слово hangup."
+system_content = "Вы - Татьяна, оператор сервисного центра Айсберг. Ваша задача выяснить доволен ли клиент недавним ремонтом и записать отзыв клиента. Если понадобится завершить разговор, используйте слово hangup. Не забывайте что ваш пол - женский, имейте это ввиду когда говорите от вашего имени."
+llm_messages=[
+            {"role": "system", "content": system_content}
+        ]
+
+# Add this constant at the top of your file, with other constants
+TRANSCRIPTION_DELAY = 1  # Delay in seconds to wait for new transcriptions
 
 # Silence configuration
-SILENCE_THRESHOLD = 0.01  # Adjust this value based on your microphone sensitivity
-SILENCE_DURATION = 4  # Silence duration in seconds to trigger the alert
+# SILENCE_THRESHOLD = 0.01  # Adjust this value based on your microphone sensitivity
+# SILENCE_DURATION = 4  # Silence duration in seconds to trigger the alert
 last_received_time = time.time()
 speech = {
     "start_time": 0,
     "end_time": 0,
+    "speech_end_time": 0,
     "text": ""
 }
 
@@ -22,10 +36,17 @@ sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
 
 def audio_callback(indata, frames, time_info, status):        
-        if status:
-            print(status)
-        
+    global is_speech_active
+    
+    if status:
+        print(status)
+    
+    if is_speech_active:
         sock.sendall(indata.tobytes())
+    # else:
+    #     # Optionally, send silent data instead of completely muting
+    #     silent_data = np.zeros_like(indata)
+    #     sock.sendall(silent_data.tobytes())
 
 async def receive_transcriptions():
     global last_received_time
@@ -55,26 +76,73 @@ async def receive_transcriptions():
                     text = parts[2].strip()
                     print(f"Start time: {time_start} ms")
                     print(f"End time: {time_end} ms")
+                    print(f"Speech end time: {speech['speech_end_time']} ms")
                     print(f"Text: {text}")
                     speech["text"] += text.replace("\n", " ")
                     print(f'Full text: {speech["text"]}')
                     print("---")
 
                     # Make an asynchronous call to the LLM here
-                    await call_llm(speech["text"])
+                    await call_llm(time_end, speech["text"])
                 else:
                     print(f"Received invalid data: {data}")
         except socket.error as e:
             print(f"Socket error: {e}")
             break
 
-async def call_llm(text):
-    # Implement your asynchronous LLM call here
-    # This is just a placeholder example
-    # await asyncio.sleep(1)
-    system_content = "Вы оператор сервисного центра по ремонту бытовой технике. Старайтесь не отвечать длинным текстом без крайней необходимости, ведь это телефонный разговор. Клиент не сможет прочитать ваш ответ, он будет его слушать."
-    text = llm_request(system_content, text)
-    print(f"[>> LLM >>] {text}")
+async def call_llm(time_end, user_text):
+    global is_speech_active
+    global llm_messages
+    global speech
+    global last_received_time
+    
+    # Wait for the delay period or until new transcription arrives
+    # delay_start = time.time()
+    # while time.time() - delay_start < TRANSCRIPTION_DELAY:
+    #     if time.time() - last_received_time < TRANSCRIPTION_DELAY:
+    #         # New transcription received, reset the delay
+    #         delay_start = time.time()
+    #     await asyncio.sleep(0.1)  # Short sleep to prevent busy waiting
+    
+    # speech_start_time_int = time_end
+    speech_start_time = time.time()
+    
+    # Rest of your existing code...
+    model = "gpt-4o"
+    # model = "gpt-3.5-turbo-1106"
+    
+    llm_messages.append({"role": "user", "content": user_text})
+    text = await llm_request(llm_messages, model)
+    if "hangup" in text:
+        sock.shutdown(socket.SHUT_RDWR)
+        sock.close()
+        print("Socket connection closed.")
+        exit()
+
+    llm_messages.append({"role": "assistant", "content": text})
+    
+    if speech["start_time"] < time_end:        
+        print(f"[>> LLM >>] {text}")
+        # Speech synthesis
+        model = 'tts-1'
+        voice_id = "shimmer"
+        speed = 1.1
+        # Mute microphone
+        is_speech_active = False
+        await speech_synthesis(text, model, voice_id, speed)
+        print('# Speech synthesis done!')
+        speech["speech_end_time"] = time.time() - speech_start_time
+        # Unmute microphone
+        is_speech_active = True
+        # Clean text
+        speech["text"] = ""
+    else:
+        print(f'# llm interrupted. start_time: {speech["start_time"]}, time_end: {time_end}')
+        await asyncio.sleep(1)
+    
+    # Unmute microphone
+    is_speech_active = True
+    
 
 async def main():
     # Parse command-line arguments
@@ -108,7 +176,7 @@ async def main():
 
     try:
         with stream:
-            await asyncio.sleep(60)  # Sleep for N seconds (adjust as needed)
+            await asyncio.sleep(600)  # Sleep for N seconds (adjust as needed)
     except KeyboardInterrupt:
         print("Recording stopped by the user.")
     finally:
