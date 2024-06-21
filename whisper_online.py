@@ -169,7 +169,8 @@ class OpenaiApiASR(ASRBase):
 
         self.load_model()
 
-        self.use_vad_opt = False
+        # self.use_vad_opt = False
+        self.use_vad_opt = True
 
         # reset the task in set_translate_task
         self.task = "transcribe"
@@ -566,7 +567,7 @@ def asr_factory(args, logfile=sys.stderr):
     """
     backend = args.backend
     if backend == "openai-api":
-        logger.debug("Using OpenAI API.")
+        logger.debug(f"Using OpenAI API. with args: {args}")
         asr = OpenaiApiASR(lan=args.lan)
     else:
         if backend == "faster-whisper":
