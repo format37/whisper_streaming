@@ -11,31 +11,59 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import numpy as np
 
-async def speech_synthesis(text, model, voice, speed=1.0):
-    # Speed from 0.25 to 4.0
-    # Set your API key
-    api_key = os.getenv("OPENAI_API_KEY")
-    if not api_key:
-        raise ValueError("API key is not set. You need to set the OPENAI_API_KEY environment variable this way:\nexport OPENAI_API_KEY=yourkey")
+async def speech_synthesis(engine, text, model, voice, speed=1.0):
+    if engine == "openai":
+        # Speed from 0.25 to 4.0
+        # Set your API key
+        api_key = os.getenv("OPENAI_API_KEY")
+        if not api_key:
+            raise ValueError("API key is not set. You need to set the OPENAI_API_KEY environment variable this way:\nexport OPENAI_API_KEY=yourkey")
 
-    client = OpenAI()
-    # https://platform.openai.com/docs/guides/text-to-speech
-    speech_file_path = Path(__file__).parent / "speech.mp3"
+        client = OpenAI()
+        # https://platform.openai.com/docs/guides/text-to-speech
+        speech_file_path = Path(__file__).parent / "speech.mp3"
+        
+        time_start = time.time()
+        response = client.audio.speech.create(
+            model=model,
+            voice=voice,
+            speed=speed,
+            input=text,
+        )
+        response.stream_to_file(speech_file_path)
+        time_end = time.time()
+        print(f"Time elapsed: {time_end - time_start} seconds")
     
-    time_start = time.time()
-    response = client.audio.speech.create(
-    model=model,
-    voice=voice,
-    speed=speed,
-    input=text,
-    )
-    response.stream_to_file(speech_file_path)
-    time_end = time.time()
-    print(f"Time elapsed: {time_end - time_start} seconds")
+    elif engine == "google":
+        # https://cloud.google.com/text-to-speech/docs/voices
+        # https://cloud.google.com/text-to-speech
+        os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = 'google.json'
+        client = texttospeech.TextToSpeechClient()
+
+        synthesis_input = texttospeech.SynthesisInput(text=text)
+
+        voice = texttospeech.VoiceSelectionParams(
+            language_code=model,
+            name=voice)
+
+        audio_config = texttospeech.AudioConfig(
+            audio_encoding=texttospeech.AudioEncoding.MP3,
+            speaking_rate=speed
+        )
+
+        time_start = time.time()
+        response = client.synthesize_speech(input = synthesis_input, voice = voice, audio_config = audio_config)
+        time_end = time.time()
+
+        # Save response as audio file
+        speech_file_path = Path(__file__).parent / "speech.wav"
+        with open(speech_file_path, "wb") as f:
+            f.write(response.audio_content)
+        print(f"Time spent: {time_end - time_start} seconds")
 
     # Play audio
-    # playsound(str(speech_file_path))
-    print('Speech synthesis done!')
+    playsound(str(speech_file_path))
+    print(f'{engine} Speech synthesis done!')
     return time_end - time_start
 
 async def google_tts(text, model = 'en-US-Neural2-F', language='en-US', speed=1):
@@ -128,7 +156,7 @@ async def test_google():
         f.write(response)
     print(f"Time spent: {time_spent} seconds")
     # Play audio
-    # playsound("audio.wav")
+    playsound("audio.wav")
     print('Google speech synthesis done!')
     return time_spent
 

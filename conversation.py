@@ -8,7 +8,7 @@ import numpy as np
 import sounddevice as sd
 import asyncio
 from asyncio import Queue
-from llm import llm_request
+from llm import llm_request, get_api_key
 from tts import speech_synthesis
 import time
 
@@ -51,9 +51,9 @@ else:
     logger.warning("Whisper is not warmed up. The first chunk processing may take longer.")
 
 # LLM configuration
-# system_content = "Вы - Татьяна, оператор колл центра. Вы звоните клиенту, что бы выяснить оставлял ли он заказ на ремонт. Если оставлял, напишите ЗАЯВКА, если нет, ОШИБКА. Для завершения разговора попрощайтесь с клиентом и напишите hangup. Если это заявка, после завершения разговора клиент будет переведен на оператора для приема заявки."
+system_content = "Вы - Татьяна, оператор колл центра. Вы звоните клиенту, что бы выяснить оставлял ли он заказ на ремонт. Если оставлял, напишите ЗАЯВКА, если нет, ОШИБКА. Для завершения разговора попрощайтесь с клиентом и напишите hangup. Если это заявка, после завершения разговора клиент будет переведен на оператора для приема заявки."
 # system_content = "Вы - Татьяна, оператор сервисного центра Айсберг. Ваша задача выяснить доволен ли клиент недавним ремонтом и записать отзыв клиента. Если понадобится завершить разговор, используйте слово hangup. Не забывайте что ваш пол - женский, имейте это ввиду когда говорите от вашего имени."
-system_content = "Вы - Татьяна, оператор сервисного центра Айсберг. Ваша задача принять заявку на ремонт. Если понадобится завершить разговор, используйте слово hangup. Не забывайте что ваш пол - женский, имейте это ввиду когда говорите от вашего имени. Номер телефона клиента определен автоматически: +7-999-458-2769. Достаточно его спросить."
+# system_content = "Вы - Татьяна, оператор сервисного центра Айсберг. Ваша задача принять заявку на ремонт. Если понадобится завершить разговор, используйте слово hangup. Не забывайте что ваш пол - женский, имейте это ввиду когда говорите от вашего имени. Номер телефона клиента определен автоматически: +7-999-458-2769. Достаточно его спросить."
 
 
 llm_messages = [
@@ -152,23 +152,40 @@ async def call_llm(time_end, user_text):
     global llm_messages
     global speech
     
+    llm_messages.append({"role": "user", "content": user_text})
+    # text = await llm_request(llm_messages, model)
+    engine = "openai"
     model = "gpt-4o"
     # model = "gpt-3.5-turbo-instruct"
-    
-    llm_messages.append({"role": "user", "content": user_text})
-    text = await llm_request(llm_messages, model)
+
+    # engine = "google"
+    # model = "gemini-1.5-flash"
+    PROJECT = 'iceberg-332311' # https://console.cloud.google.com
+    LOCATION = 'europe-central2' # https://cloud.google.com/vertex-ai/generative-ai/docs/learn/locations
+
+    api_key = get_api_key(engine)
+    # print(f'* llm_request * Engine: {engine}, Model: {model}, API key: {api_key}, PROJECT: {PROJECT}, LOCATION: {LOCATION}, Messages: {llm_messages}')
+    text = await llm_request(engine, model, api_key, llm_messages, PROJECT, LOCATION)
     llm_messages.append({"role": "assistant", "content": text})
     
     if speech["start_time"] < time_end:
         print(f"[>> LLM >>] {text}")
         # Speech synthesis
-        model = 'tts-1'
-        voice_id = "shimmer"
         speed = 1.4
+
+        # engine = "whisper"
+        model = 'tts-1'
+        voice_id = "shimmer"        
+        
+        engine = "google"
+        model = "ru-RU"
+        voice_id = "ru-RU-Wavenet-A"
+
         # Mute microphone
         logger.debug("Muting microphone for speech synthesis")
         is_speech_active = False
-        await speech_synthesis(text.replace("hangup",""), model, voice_id, speed)
+
+        await speech_synthesis(engine, text.replace("hangup",""), model, voice_id, speed)
         print('# Speech synthesis done!')
         speech["speech_end_time"] = time.time()  # Update speech end time
         logger.debug(f"Speech synthesis ended at {speech['speech_end_time']} (global time)")

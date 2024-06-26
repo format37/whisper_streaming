@@ -16,9 +16,10 @@ def get_api_key(engine):
     
     if engine == "openai":
         # Read config from config.json
-        with open('config.json') as f:
-            config = json.load(f)
-            api_key = config['openai_key']
+        # with open('config.json') as f:
+        #     config = json.load(f)
+        #     api_key = config['openai_key']
+        api_key = os.getenv("OPENAI_API_KEY")
         if not api_key:
             raise ValueError("API key is not set. You need to set the OPENAI_API_KEY environment variable this way:\nexport OPENAI_API_KEY=yourkey")
         return api_key
@@ -36,7 +37,7 @@ def get_api_key(engine):
 
 
 async def llm_request(engine, model, api_key, messages, PROJECT=None, LOCATION=None):
-    
+    # print(f'# llm_request # Engine: {engine}, Model: {model}, API key: {api_key}, PROJECT: {PROJECT}, LOCATION: {LOCATION}, Messages: {messages}')
     if engine == "openai":
         client = OpenAI(api_key=api_key)
 
